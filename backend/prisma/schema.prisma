@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String          @id @default(uuid())
+  email     String          @unique
+  username  String          @unique
+  password  String
+  color     String          @default("#6366f1")
+  createdAt DateTime        @default(now())
+  documents Document[]
+  shares    DocumentShare[]
+}
+
+model Document {
+  id        String          @id @default(uuid())
+  title     String          @default("Untitled Document")
+  content   String          @default("")
+  revision  Int             @default(0)
+  isPublic  Boolean         @default(false)
+  ownerId   String
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  shares    DocumentShare[]
+}
+
+model DocumentShare {
+  id         String   @id @default(uuid())
+  documentId String
+  userId     String
+  role       String   @default("editor") // "viewer" | "editor"
+  createdAt  DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+}
