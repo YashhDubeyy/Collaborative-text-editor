@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   EditorState,
   Transaction,
@@ -27,6 +27,8 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { TextOperation } from '../../ot/TextOperation';
 import { RemoteUser } from '../../store/useEditorStore';
+import { FormatToolbar, FormatAction } from './FormatToolbar';
+import { MarkdownPreview } from './MarkdownPreview';
 
 // ── Remote Cursor Widget ───────────────────────────────────────────────────────
 class RemoteCursorWidget extends WidgetType {
@@ -66,14 +68,12 @@ const cursorDecorationsField = StateField.define<DecorationSet>({
   create() { return Decoration.none; },
 
   update(deco, tr) {
-    // Map existing decorations through document changes
     deco = deco.map(tr.changes);
 
     for (const effect of tr.effects) {
       if (effect.is(setCursorsEffect)) {
         const builder = new RangeSetBuilder<Decoration>();
 
-        // Sort by cursor position so RangeSetBuilder receives them in order
         const sorted = [...effect.value]
           .filter(u => u.cursor !== undefined && u.cursor >= 0)
           .sort((a, b) => (a.cursor ?? 0) - (b.cursor ?? 0));
@@ -104,9 +104,12 @@ interface CollabEditorProps {
   initialDoc: string;
   onLocalOp: (op: TextOperation) => void;
   onCursorChange: (cursor: number) => void;
-  /** Ref populated by this component so the parent can push remote ops in */
   applyRemoteRef: React.MutableRefObject<((op: TextOperation) => void) | null>;
   remoteUsers: RemoteUser[];
+  /** Callback to open the image upload file picker */
+  onImageUpload: () => void;
+  /** Ref that EditorPage populates: call it to insert text at the current cursor */
+  insertTextRef: React.MutableRefObject<((text: string) => void) | null>;
 }
 
 export function CollabEditor({
@@ -115,19 +118,24 @@ export function CollabEditor({
   onCursorChange,
   applyRemoteRef,
   remoteUsers,
+  onImageUpload,
+  insertTextRef,
 }: CollabEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const suppressRef = useRef(false); // prevent remote apply from firing onLocalOp
+  const suppressRef = useRef(false);
 
-  // ── Sync remote cursor decorations whenever remoteUsers changes ─────────────
+  const [showPreview, setShowPreview] = useState(true);
+  const [previewContent, setPreviewContent] = useState(initialDoc);
+
+  // ── Sync remote cursor decorations ───────────────────────────────────────────
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({ effects: setCursorsEffect.of(remoteUsers) });
   }, [remoteUsers]);
 
-  // ── Apply a remote op without triggering onLocalOp ──────────────────────────
+  // ── Apply a remote op ────────────────────────────────────────────────────────
   const applyRemoteOp = useCallback((op: TextOperation) => {
     const view = viewRef.current;
     if (!view) return;
@@ -137,14 +145,13 @@ export function CollabEditor({
       const newDoc = op.apply(currentDoc);
       const changes = computeChangesFromOp(op);
       view.dispatch({ changes, annotations: [Transaction.remote.of(true)] });
-      // Verify apply succeeded (defensive)
       if (view.state.doc.toString() !== newDoc) {
-        // Fallback: replace entire doc
         view.dispatch({
           changes: { from: 0, to: view.state.doc.length, insert: newDoc },
           annotations: [Transaction.remote.of(true)],
         });
       }
+      setPreviewContent(view.state.doc.toString());
     } catch (e) {
       console.error('applyRemoteOp failed:', e);
     } finally {
@@ -155,6 +162,105 @@ export function CollabEditor({
   useEffect(() => {
     applyRemoteRef.current = applyRemoteOp;
   }, [applyRemoteOp, applyRemoteRef]);
+
+  // ── Expose insertText to parent (for image uploads) ──────────────────────────
+  useEffect(() => {
+    insertTextRef.current = (text: string) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const { from } = view.state.selection.main;
+      view.dispatch({
+        changes: { from, to: from, insert: text },
+        selection: { anchor: from + text.length },
+      });
+      view.focus();
+    };
+    return () => { insertTextRef.current = null; };
+  }, [insertTextRef]);
+
+  // ── Format toolbar action → insert markdown syntax ───────────────────────────
+  const handleFormat = useCallback((action: FormatAction) => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const { from, to } = view.state.selection.main;
+    const selected = view.state.sliceDoc(from, to);
+    const line = view.state.doc.lineAt(from);
+
+    let insert = '';
+    let anchor: number | undefined;
+    let head: number | undefined;
+
+    switch (action) {
+      case 'bold':
+        insert = `**${selected || 'bold text'}**`;
+        if (!selected) { anchor = from + 2; head = from + 9; }
+        break;
+      case 'italic':
+        insert = `*${selected || 'italic text'}*`;
+        if (!selected) { anchor = from + 1; head = from + 12; }
+        break;
+      case 'strikethrough':
+        insert = `~~${selected || 'strikethrough'}~~`;
+        if (!selected) { anchor = from + 2; head = from + 15; }
+        break;
+      case 'inline-code':
+        insert = `\`${selected || 'code'}\``;
+        if (!selected) { anchor = from + 1; head = from + 5; }
+        break;
+      case 'h1':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '# ' } });
+        return;
+      case 'h2':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '## ' } });
+        return;
+      case 'h3':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '### ' } });
+        return;
+      case 'blockquote':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '> ' } });
+        return;
+      case 'hr':
+        view.dispatch({ changes: { from: line.to, insert: '\n\n---\n\n' } });
+        return;
+      case 'ul':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '- ' } });
+        return;
+      case 'ol':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '1. ' } });
+        return;
+      case 'task-list':
+        view.dispatch({ changes: { from: line.from, to: line.from, insert: '- [ ] ' } });
+        return;
+      case 'code-block': {
+        const snippet = `\`\`\`\n${selected || 'code here'}\n\`\`\`\n`;
+        view.dispatch({
+          changes: { from: line.from, to: to, insert: snippet },
+          selection: { anchor: line.from + 4, head: line.from + 4 + (selected ? selected.length : 9) },
+        });
+        return;
+      }
+      case 'link':
+        insert = `[${selected || 'link text'}](url)`;
+        if (!selected) { anchor = from + 1; head = from + 10; }
+        break;
+      case 'table':
+        insert = '\n| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| Cell     | Cell     | Cell     |\n';
+        view.dispatch({ changes: { from: line.to, insert } });
+        return;
+      case 'image':
+        onImageUpload();
+        return;
+      default:
+        return;
+    }
+
+    view.dispatch({
+      changes: { from, to, insert },
+      selection: anchor !== undefined ? { anchor, head: head ?? anchor } : undefined,
+    });
+    view.focus();
+  }, [onImageUpload]);
 
   // ── Mount CodeMirror once ────────────────────────────────────────────────────
   useEffect(() => {
@@ -169,6 +275,7 @@ export function CollabEditor({
         const prevLen = update.startState.doc.length;
         const op = TextOperation.fromCMChanges(changes, prevLen);
         onLocalOp(op);
+        setPreviewContent(update.state.doc.toString());
       }
       if (update.selectionSet) {
         onCursorChange(update.state.selection.main.head);
@@ -208,7 +315,6 @@ export function CollabEditor({
           },
           '.cm-lineNumbers': { color: '#3d4066' },
           '&.cm-focused': { outline: 'none' },
-          // Remote cursor styles injected into the CM theme
           '.cm-remote-cursor': {
             position: 'relative',
             display: 'inline-block',
@@ -244,7 +350,6 @@ export function CollabEditor({
             opacity: '1',
           },
         }),
-        // Always show labels (no hover needed for demo)
         EditorView.baseTheme({
           '.cm-remote-label': { opacity: '1 !important' },
         }),
@@ -260,16 +365,36 @@ export function CollabEditor({
       view.destroy();
       viewRef.current = null;
     };
-  }, []); // mount once — intentionally no deps
+  }, []); // mount once
 
-  return <div ref={editorRef} className="cm-editor-wrapper" />;
+  return (
+    <div className="editor-split-root">
+      {/* Formatting Toolbar */}
+      <FormatToolbar
+        onFormat={handleFormat}
+        onImageUpload={onImageUpload}
+        showPreview={showPreview}
+        onTogglePreview={() => setShowPreview(v => !v)}
+      />
+
+      {/* Split Pane */}
+      <div className={`editor-split-body ${showPreview ? 'split-active' : ''}`}>
+        {/* CodeMirror Editor */}
+        <div ref={editorRef} className="cm-editor-wrapper" />
+
+        {/* Live Preview */}
+        {showPreview && (
+          <MarkdownPreview
+            content={previewContent}
+            onClose={() => setShowPreview(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-/**
- * Convert a TextOperation directly into CodeMirror ChangeSpec array.
- * Walking the ops is cheaper than diffing the resulting strings.
- */
 function computeChangesFromOp(op: TextOperation): Array<{ from: number; to?: number; insert?: string }> {
   const changes: Array<{ from: number; to?: number; insert?: string }> = [];
   let pos = 0;

@@ -27,6 +27,9 @@ export function EditorPage() {
   const [showShare, setShowShare] = useState(false);
   const [docIsPublic, setDocIsPublic] = useState(false);
 
+  // Ref to insert text into the editor (for image uploads)
+  const insertAtCursorRef = useRef<((text: string) => void) | null>(null);
+
   const applyRemoteRef = useRef<((op: TextOperation) => void) | null>(null);
 
   const isOwner = currentDoc?.ownerId === user?.id;
@@ -72,6 +75,32 @@ export function EditorPage() {
     updateDocTitle(docId!, titleInput.trim());
     setEditingTitle(false);
   };
+
+  // ── Image Upload ────────────────────────────────────────────────────────────
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
+  const handleImageFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // reset so same file can be picked again
+    e.target.value = '';
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await authFetch('/uploads/image', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Upload failed');
+      const { url } = await res.json();
+      // Use relative URL — proxied through Vite dev server (/uploads → backend)
+      const mdText = `![${file.name.replace(/\.[^.]+$/, '')}](${url})`;
+      insertAtCursorRef.current?.(mdText);
+    } catch (err) {
+      console.error('Image upload error:', err);
+    }
+  }, [authFetch]);
 
   // ── Share link copy ─────────────────────────────────────────────────────────
   const copyLink = () => {
@@ -151,9 +180,20 @@ export function EditorPage() {
             onCursorChange={sendCursor}
             applyRemoteRef={applyRemoteRef}
             remoteUsers={remoteUsers}
+            onImageUpload={handleImageUpload}
+            insertTextRef={insertAtCursorRef}
           />
         )}
       </div>
+
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleImageFileChange}
+      />
 
       {showShare && currentDoc && (
         <ShareModal

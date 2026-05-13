@@ -49,14 +49,16 @@ export function useAuth() {
   const logout = useCallback(() => clearAuth(), [clearAuth]);
 
   const authFetch = useCallback(async (url: string, options: RequestInit = {}) => {
-    return fetch(`${API}${url}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
-    });
+    // Don't set Content-Type for FormData — browser sets multipart boundary automatically
+    const isFormData = options.body instanceof FormData;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      ...(options.headers as Record<string, string>),
+    };
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return fetch(`${API}${url}`, { ...options, headers });
   }, [token]);
 
   return { user, token, loading, error, register, login, logout, authFetch, isAuthenticated: !!token };

@@ -5,17 +5,24 @@ import { PrismaClient } from '@prisma/client';
 import { setupSocketGateway } from './socket/gateway';
 import authRouter from './routes/auth';
 import documentsRouter from './routes/documents';
+import uploadsRouter from './routes/uploads';
 
 const prisma = new PrismaClient();
 const app = express();
 const httpServer = createServer(app);
 
+import path from 'path';
+
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
+
+// Serve uploaded images statically
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
 app.use('/api/auth', authRouter);
 app.use('/api/documents', documentsRouter);
+app.use('/api/uploads', uploadsRouter);
 
 setupSocketGateway(httpServer);
 
