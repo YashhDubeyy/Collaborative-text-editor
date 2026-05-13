@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Zap, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Zap, Eye, EyeOff, ArrowRight, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 
 type Mode = 'login' | 'register';
 
@@ -12,6 +13,7 @@ export function AuthPage() {
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const { login, register, loading, error } = useAuth();
+  const { theme, toggle } = useTheme();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,6 +29,11 @@ export function AuthPage() {
       <div className="auth-bg" />
       <div className="auth-card">
         <div className="auth-header">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+            <button className="btn btn-ghost btn-sm theme-toggle-btn" onClick={toggle} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+          </div>
           <div className="auth-logo">
             <Zap size={28} />
           </div>

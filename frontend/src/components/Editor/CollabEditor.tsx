@@ -310,10 +310,10 @@ export function CollabEditor({
           },
           '.cm-content': { padding: '16px 0', minHeight: '100%' },
           '.cm-gutters': {
-            background: '#1a1b26',
-            borderRight: '1px solid #2a2b3d',
+            background: '#080808',
+            borderRight: '1px solid #222222',
           },
-          '.cm-lineNumbers': { color: '#3d4066' },
+          '.cm-lineNumbers': { color: '#444444' },
           '&.cm-focused': { outline: 'none' },
           '.cm-remote-cursor': {
             position: 'relative',

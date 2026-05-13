@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { FileText, LogOut, Plus, Zap } from 'lucide-react';
+import { LogOut, Plus, Zap, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '../store/useEditorStore';
 import { useEditorStore } from '../store/useEditorStore';
+import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
   onNewDoc?: () => void;
@@ -11,13 +12,14 @@ interface NavbarProps {
 export function Navbar({ onNewDoc }: NavbarProps) {
   const { user, clearAuth } = useAuthStore();
   const { connectionStatus } = useEditorStore();
+  const { theme, toggle } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = () => { clearAuth(); navigate('/'); };
 
   const statusColor =
-    connectionStatus === 'connected' ? '#22c55e' :
-    connectionStatus === 'connecting' ? '#f59e0b' : '#ef4444';
+    connectionStatus === 'connected' ? '#aaaaaa' :
+    connectionStatus === 'connecting' ? '#666666' : '#ff4444';
   const statusLabel =
     connectionStatus === 'connected' ? 'Live' :
     connectionStatus === 'connecting' ? 'Connecting…' : 'Offline';
@@ -55,6 +57,13 @@ export function Navbar({ onNewDoc }: NavbarProps) {
             <span className="user-name">{user.username}</span>
           </div>
         )}
+        <button
+          className="btn btn-ghost btn-sm theme-toggle-btn"
+          onClick={toggle}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         <button className="btn btn-ghost btn-sm" onClick={handleLogout} title="Logout">
           <LogOut size={16} />
         </button>

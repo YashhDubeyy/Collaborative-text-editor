@@ -1,11 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Users, Shield, GitMerge, ArrowRight, Terminal } from 'lucide-react';
+import { Zap, Users, Shield, GitMerge, ArrowRight, Terminal, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '../store/useEditorStore';
+import { useTheme } from '../hooks/useTheme';
 
 export function LandingPage() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
+  const { theme, toggle } = useTheme();
 
   const handleCTA = () => navigate(token ? '/docs' : '/auth');
 
@@ -15,6 +17,9 @@ export function LandingPage() {
       <nav className="landing-nav">
         <div className="landing-logo"><Zap size={22} /> CollabEdit</div>
         <div className="landing-nav-actions">
+          <button className="btn btn-ghost btn-sm theme-toggle-btn" onClick={toggle} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button className="btn btn-ghost" onClick={() => navigate('/auth')}>Sign In</button>
           <button className="btn btn-primary" onClick={handleCTA}>Get Started <ArrowRight size={15} /></button>
         </div>
@@ -41,26 +46,26 @@ export function LandingPage() {
         {/* Fake editor preview */}
         <div className="hero-editor-preview">
           <div className="preview-topbar">
-            <div className="preview-dot" style={{ background: '#ef4444' }} />
-            <div className="preview-dot" style={{ background: '#f59e0b' }} />
-            <div className="preview-dot" style={{ background: '#22c55e' }} />
+            <div className="preview-dot" style={{ background: '#333' }} />
+            <div className="preview-dot" style={{ background: '#444' }} />
+            <div className="preview-dot" style={{ background: '#555' }} />
             <span className="preview-title">project-notes.md</span>
             <div className="preview-users">
-              <div className="preview-avatar" style={{ background: '#6366f1' }}>A</div>
-              <div className="preview-avatar" style={{ background: '#ec4899' }}>B</div>
-              <div className="preview-avatar" style={{ background: '#14b8a6' }}>C</div>
+              <div className="preview-avatar" style={{ background: '#333' }}>A</div>
+              <div className="preview-avatar" style={{ background: '#444' }}>B</div>
+              <div className="preview-avatar" style={{ background: '#555' }}>C</div>
             </div>
           </div>
           <div className="preview-body">
             <div className="preview-line"><span className="preview-hash">#</span> Meeting Notes</div>
             <div className="preview-line preview-line-cursor preview-cursor-pink">
               <span>Alice is typing here</span>
-              <span className="preview-caret" style={{ background: '#ec4899' }} />
+              <span className="preview-caret" style={{ background: '#666' }} />
             </div>
             <div className="preview-line">- Deploy new feature by Friday</div>
             <div className="preview-line preview-line-cursor preview-cursor-teal">
               <span>Bob is collaborating</span>
-              <span className="preview-caret" style={{ background: '#14b8a6' }} />
+              <span className="preview-caret" style={{ background: '#888' }} />
             </div>
             <div className="preview-line">- Review PRs from last sprint</div>
           </div>
